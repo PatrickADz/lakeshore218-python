@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""
+CLI para el Lakeshore 218.
+
+Ejemplos:
+    python cli.py --addr 12 idn
+    python cli.py --addr 12 read 1
+    python cli.py --addr 12 read-all --unit C
+    python cli.py --addr 12 status 1
+    python cli.py --addr 12 name 1 --set "Cold Head"
+    python cli.py --addr 12 filter 1
+    python cli.py --addr 12 filter 1 --set --points 8 --window 2 --on
+    python cli.py --addr 12 alarm 1
+    python cli.py --addr 12 minmax 1
+    python cli.py --addr 12 minmax 1 --reset
+    python cli.py --addr 12 monitor --unit K --interval 1
+    python cli.py --addr 12 shell
+
+Todos los subcomandos aceptan --addr (dirección GPIB, obligatoria),
+--board (índice de tarjeta, default 0) y --timeout (ms, default 5000).
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+
+from lakeshore218 import (
+    Lakeshore218,
+    TemperatureUnit,
+    FilterConfig,
+    AlarmConfig,
+)
+from keysight_visa import KeysightVISATransport
+
+
+UNIT_MAP = {
+    "K": TemperatureUnit.KELVIN,
+    "C": TemperatureUnit.CELSIUS,
+    "S": TemperatureUnit.SENSOR,
+}
+
+
+def build_transport(args: argparse.Namespace) -> KeysightVISATransport:
+    return KeysightVISATransport(
+        gpib_address=args.addr,
+        board_index=args.board,
+        timeout_ms=args.timeout,
+    )
+
+
+# --------------------------------------------------------------------
+# Handlers de cada subcomando
+# --------------------------------------------------------------------
+
+def cmd_idn(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    print(ls.idn())
+
+
+def cmd_read(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    unit = UNIT_MAP[args.unit]
+    value = ls.get_reading(args.channel, unit)
+    print(f"Canal {args.channel}: {value:.4f} {args.unit}")
+
+
+def cmd_read_all(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    unit = UNIT_MAP[args.unit]
+    readings = ls.get_all_readings(unit)
+    for ch, value in enumerate(readings, start=1):
+        print(f"Canal {ch}: {value:.4f} {args.unit}")
+
+
+def cmd_status(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    raw = ls.get_reading_status(args.channel)
+    flags = ls.decode_reading_status(raw)
+    print(f"Canal {args.channel} -- status crudo: {raw}")
+    for flag_name, value in flags.items():
+        marca = "X" if value else " "
+        print(f"  [{marca}] {flag_name}")
+
+
+def cmd_name(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    if args.set is not None:
+        ls.set_input_name(args.channel, args.set)
+        print(f"Canal {args.channel} renombrado a '{args.set}'")
+    else:
+        print(f"Canal {args.channel}: '{ls.get_input_name(args.channel)}'")
+
+
+def cmd_filter(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    if args.set:
+        config = FilterConfig(enabled=args.on, points=args.points, window=args.window)
+        ls.set_filter(args.channel, config)
+        print(f"Filtro canal {args.channel} configurado: {config}")
+    else:
+        config = ls.get_filter(args.channel)
+        print(f"Filtro canal {args.channel}: {config}")
+
+
+def cmd_alarm(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    if args.set:
+        config = AlarmConfig(
+            enabled=args.on,
+            high_setpoint=args.high,
+            low_setpoint=args.low,
+            deadband=args.deadband,
+            latch_enable=args.latch,
+        )
+        ls.set_alarm(args.channel, config)
+        print(f"Alarma canal {args.channel} configurada: {config}")
+    else:
+        config = ls.get_alarm(args.channel)
+        status = ls.get_alarm_status(args.channel)
+        print(f"Alarma canal {args.channel}: {config}")
+        print(f"Estado actual: high={status.high_state} low={status.low_state}")
+
+
+def cmd_minmax(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    if args.reset:
+        ls.reset_min_max()
+        print("Min/Max reiniciados en todos los canales")
+        return
+    data = ls.get_min_max(args.channel)
+    print(f"Canal {args.channel}: min={data.minimum:.4f} max={data.maximum:.4f}")
+
+
+def cmd_monitor(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    unit = UNIT_MAP[args.unit]
+    channels = args.channels if args.channels else list(range(1, 9))
+    print(f"Monitoreando canales {channels} cada {args.interval}s "
+          f"(Ctrl+C para salir)")
+    try:
+        while True:
+            timestamp = time.strftime("%H:%M:%S")
+            valores = [
+                f"CH{ch}={ls.get_reading(ch, unit):.3f}{args.unit}"
+                for ch in channels
+            ]
+            print(f"[{timestamp}] " + "  ".join(valores))
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        print("\nMonitoreo detenido.")
+
+
+def cmd_shell(ls: Lakeshore218, args: argparse.Namespace) -> None:
+    """Modo interactivo: manda comandos SCPI crudos directo al instrumento."""
+    print("Shell interactivo Lakeshore 218. Comandos SCPI crudos.")
+    print("Los que terminan en '?' se mandan con query(), el resto con write().")
+    print("Escribí 'exit' o Ctrl+D para salir.\n")
+    while True:
+        try:
+            raw = input("218> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not raw:
+            continue
+        if raw.lower() in ("exit", "quit"):
+            break
+        try:
+            if raw.endswith("?"):
+                print(ls.transport.query(raw))
+            else:
+                ls.transport.write(raw)
+        except Exception as exc:  # noqa: BLE001 - shell de debug, se quiere ver cualquier error
+            print(f"Error: {exc}")
+
+
+# --------------------------------------------------------------------
+# Definición de argparse
+# --------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="lakeshore218-cli",
+        description="CLI para controlar el Lakeshore 218 vía Keysight USB-GPIB.",
+    )
+    parser.add_argument("--addr", type=int, required=True, help="Dirección GPIB del 218 (1-30)")
+    parser.add_argument("--board", type=int, default=0, help="Índice de tarjeta GPIB (default 0)")
+    parser.add_argument("--timeout", type=int, default=5000, help="Timeout en ms (default 5000)")
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("idn", help="Consulta *IDN?").set_defaults(func=cmd_idn)
+
+    p_read = subparsers.add_parser("read", help="Lee un canal")
+    p_read.add_argument("channel", type=int)
+    p_read.add_argument("--unit", choices=["K", "C", "S"], default="K")
+    p_read.set_defaults(func=cmd_read)
+
+    p_read_all = subparsers.add_parser("read-all", help="Lee los 8 canales")
+    p_read_all.add_argument("--unit", choices=["K", "C", "S"], default="K")
+    p_read_all.set_defaults(func=cmd_read_all)
+
+    p_status = subparsers.add_parser("status", help="Estado de lectura de un canal (RDGST?)")
+    p_status.add_argument("channel", type=int)
+    p_status.set_defaults(func=cmd_status)
+
+    p_name = subparsers.add_parser("name", help="Lee/asigna el nombre de un canal")
+    p_name.add_argument("channel", type=int)
+    p_name.add_argument("--set", type=str, default=None, help="Nuevo nombre (si se omite, solo consulta)")
+    p_name.set_defaults(func=cmd_name)
+
+    p_filter = subparsers.add_parser("filter", help="Lee/configura el filtro de promediado")
+    p_filter.add_argument("channel", type=int)
+    p_filter.add_argument("--set", action="store_true", help="Escribir configuración en vez de solo leer")
+    p_filter.add_argument("--on", action="store_true", help="Habilitar filtro (usar con --set)")
+    p_filter.add_argument("--points", type=int, default=8, help="Puntos del promedio (2-64)")
+    p_filter.add_argument("--window", type=int, default=1, help="Ventana %% (1-10)")
+    p_filter.set_defaults(func=cmd_filter)
+
+    p_alarm = subparsers.add_parser("alarm", help="Lee/configura alarma de un canal")
+    p_alarm.add_argument("channel", type=int)
+    p_alarm.add_argument("--set", action="store_true", help="Escribir configuración en vez de solo leer")
+    p_alarm.add_argument("--on", action="store_true", help="Habilitar alarma (usar con --set)")
+    p_alarm.add_argument("--high", type=float, default=0.0, help="Setpoint alto")
+    p_alarm.add_argument("--low", type=float, default=0.0, help="Setpoint bajo")
+    p_alarm.add_argument("--deadband", type=float, default=0.0, help="Deadband")
+    p_alarm.add_argument("--latch", action="store_true", help="Habilitar latch")
+    p_alarm.set_defaults(func=cmd_alarm)
+
+    p_minmax = subparsers.add_parser("minmax", help="Lee o reinicia min/max")
+    p_minmax.add_argument("channel", type=int, nargs="?", default=1)
+    p_minmax.add_argument("--reset", action="store_true", help="Reinicia min/max de todos los canales")
+    p_minmax.set_defaults(func=cmd_minmax)
+
+    p_monitor = subparsers.add_parser("monitor", help="Monitoreo continuo en consola")
+    p_monitor.add_argument("--unit", choices=["K", "C", "S"], default="K")
+    p_monitor.add_argument("--interval", type=float, default=1.0, help="Segundos entre lecturas")
+    p_monitor.add_argument("--channels", type=int, nargs="+", default=None,
+                            help="Canales a monitorear (default: todos, 1-8)")
+    p_monitor.set_defaults(func=cmd_monitor)
+
+    subparsers.add_parser("shell", help="Shell interactivo de comandos SCPI crudos").set_defaults(func=cmd_shell)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    transport = build_transport(args)
+    try:
+        with Lakeshore218(transport) as ls:
+            args.func(ls, args)
+    except Exception as exc:  # noqa: BLE001 - se quiere reportar cualquier falla de conexión/comando
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
