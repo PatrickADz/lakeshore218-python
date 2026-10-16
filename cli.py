@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """
-CLI para el Lakeshore 218.
+CLI para el Lakeshore 218. Soporta dos transportes intercambiables:
+Keysight USB-GPIB (VISA) y Prologix GPIB-Ethernet.
 
-Ejemplos:
-    python cli.py --addr 12 idn
-    python cli.py --addr 12 read 1
-    python cli.py --addr 12 read-all --unit C
-    python cli.py --addr 12 status 1
-    python cli.py --addr 12 name 1 --set "Cold Head"
-    python cli.py --addr 12 filter 1
-    python cli.py --addr 12 filter 1 --set --points 8 --window 2 --on
-    python cli.py --addr 12 alarm 1
-    python cli.py --addr 12 minmax 1
-    python cli.py --addr 12 minmax 1 --reset
-    python cli.py --addr 12 monitor --unit K --interval 1
-    python cli.py --addr 12 shell
+Ejemplos (Keysight):
+    python cli.py --transport keysight --addr 12 idn
+    python cli.py --transport keysight --addr 12 read-all --unit C
+    python cli.py --transport keysight --addr 12 monitor --interval 1
 
-Todos los subcomandos aceptan --addr (dirección GPIB, obligatoria),
---board (índice de tarjeta, default 0) y --timeout (ms, default 5000).
+Ejemplos (Prologix):
+    python cli.py --transport prologix --addr 12 --ip 192.168.1.50 idn
+    python cli.py --transport prologix --addr 12 --ip 192.168.1.50 read-all
+
+Argumentos de conexión según transporte:
+    --transport keysight: --addr (obligatorio), --board (default 0),
+                           --timeout (ms, default 5000)
+    --transport prologix: --addr (obligatorio), --ip (obligatorio),
+                           --port (default 1234), --timeout (ms, default 5000)
+
+IMPORTANTE -- imports diferidos a propósito: `pyvisa` (necesario para
+Keysight) solo se importa si se elige --transport keysight, y el socket
+de Prologix no tiene dependencias externas. Esto permite compartir este
+mismo cli.py con alguien que solo tiene uno de los dos adaptadores, sin
+que le falle por no tener instalada una dependencia que no va a usar
+(ver README.md, sección "Windows vs Linux / dependencias por transporte").
 """
 
 from __future__ import annotations
@@ -32,7 +38,6 @@ from lakeshore218 import (
     FilterConfig,
     AlarmConfig,
 )
-from keysight_visa import KeysightVISATransport
 
 
 UNIT_MAP = {
@@ -42,12 +47,47 @@ UNIT_MAP = {
 }
 
 
-def build_transport(args: argparse.Namespace) -> KeysightVISATransport:
-    return KeysightVISATransport(
-        gpib_address=args.addr,
-        board_index=args.board,
-        timeout_ms=args.timeout,
-    )
+def build_transport(args: argparse.Namespace):
+    """
+    Construye el transporte según --transport. Los imports de cada
+    implementación se hacen acá adentro (no arriba del archivo) para
+    que este cli.py pueda compartirse sin forzar la instalación de
+    dependencias del transporte que no se va a usar.
+    """
+    if args.transport == "keysight":
+        try:
+            from keysight_visa import KeysightVISATransport
+        except ImportError as exc:
+            raise SystemExit(
+                "No se pudo importar keysight_visa / pyvisa. "
+                "Instalá pyvisa (`pip install pyvisa`) y el runtime VISA "
+                "correspondiente a tu sistema operativo. "
+                "Ver README.md, sección Windows vs Linux."
+            ) from exc
+        return KeysightVISATransport(
+            gpib_address=args.addr,
+            board_index=args.board,
+            timeout_ms=args.timeout,
+        )
+
+    if args.transport == "prologix":
+        if not args.ip:
+            raise SystemExit("--transport prologix requiere --ip <dirección del adaptador>")
+        try:
+            from prologix_ethernet import PrologixEthernetTransport
+        except ImportError as exc:
+            raise SystemExit(
+                "No se pudo importar prologix_ethernet.py. "
+                "Verificá que el archivo esté en la misma carpeta que cli.py."
+            ) from exc
+        return PrologixEthernetTransport(
+            ip_address=args.ip,
+            gpib_address=args.addr,
+            port=args.port,
+            timeout_s=args.timeout / 1000,
+        )
+
+    raise SystemExit(f"Transporte desconocido: {args.transport}")
 
 
 # --------------------------------------------------------------------
@@ -174,11 +214,21 @@ def cmd_shell(ls: Lakeshore218, args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="lakeshore218-cli",
-        description="CLI para controlar el Lakeshore 218 vía Keysight USB-GPIB.",
+        description="CLI para controlar el Lakeshore 218 (Keysight USB-GPIB o Prologix Ethernet).",
+    )
+    parser.add_argument(
+        "--transport", choices=["keysight", "prologix"], required=True,
+        help="Adaptador GPIB a usar",
     )
     parser.add_argument("--addr", type=int, required=True, help="Dirección GPIB del 218 (1-30)")
-    parser.add_argument("--board", type=int, default=0, help="Índice de tarjeta GPIB (default 0)")
     parser.add_argument("--timeout", type=int, default=5000, help="Timeout en ms (default 5000)")
+
+    # Específicos de --transport keysight
+    parser.add_argument("--board", type=int, default=0, help="[keysight] Índice de tarjeta GPIB (default 0)")
+
+    # Específicos de --transport prologix
+    parser.add_argument("--ip", type=str, default=None, help="[prologix] IP del adaptador Prologix")
+    parser.add_argument("--port", type=int, default=1234, help="[prologix] Puerto TCP (default 1234)")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 

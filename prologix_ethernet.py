@@ -34,18 +34,18 @@ class PrologixEthernetTransport(GPIBTransport):
         self._sock.settimeout(self.timeout_s)
 
         # Configuración del adaptador: modo controlador, apuntar al
-        # instrumento correcto. IMPORTANTE: se usa modo MANUAL (++auto 0)
+        # instrumento correcto. IMPORTANTE: se usó modo MANUAL (++auto 0)
         # en vez de ++auto 1. 
-        # Con auto=1 el Prologix intenta leer una
-        # respuesta después de CADA comando -- incluidos los de escritura
+        # Con auto=1 el Prologix intenta leer unarespuesta después de CADA comando
+        # incluidos los de escritura
         # pura (*RST, ALARM, FILTER, INNAME, etc.) que el 218 no responde,
         # lo que genera timeouts internos intermitentes y riesgo de leer
-        # datos desincronizados en la siguiente consulta real. 
-        # En modo manual, se puede decidir explícitamente cuándo pedir lectura
+        # datos desincronizados en la siguiente consulta real.
+
         self._send_raw("++mode 1")       # Prologix como controlador
         self._send_raw("++auto 0")       # modo manual
         self._send_raw(f"++addr {self.gpib_address}")
-        self._send_raw("++eos 2")        # terminador que agrega el Prologix
+        self._send_raw("++eos 2")        # terminador que agrega el Prologix: LF
         self._send_raw("++eoi 1")        # asertar EOI al final de cada write
         self._send_raw(f"++read_tmo_ms {int(self.timeout_s * 1000)}")
 
@@ -62,9 +62,7 @@ class PrologixEthernetTransport(GPIBTransport):
 
     def read(self) -> str:
         """
-        Pide explícitamente al Prologix que lea la respuesta pendiente del
-        instrumento (++read eoi) y devuelve lo que llegue por el socket.
-        Solo debe llamarse cuando el comando previo espera una respuesta.
+        Pide la respuesta pendiente del instrumento (++read eoi)
         """
         self._send_raw("++read eoi")
         chunks = []
