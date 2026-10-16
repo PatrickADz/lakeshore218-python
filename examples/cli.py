@@ -4,13 +4,13 @@ CLI para el Lakeshore 218. Soporta dos transportes intercambiables:
 Keysight USB-GPIB (VISA) y Prologix GPIB-Ethernet.
 
 Ejemplos (Keysight):
-    python cli.py --transport keysight --addr 12 idn
-    python cli.py --transport keysight --addr 12 read-all --unit C
-    python cli.py --transport keysight --addr 12 monitor --interval 1
+    python examples/cli.py --transport keysight --addr 12 idn
+    python examples/cli.py --transport keysight --addr 12 read-all --unit C
+    python examples/cli.py --transport keysight --addr 12 monitor --interval 1
 
 Ejemplos (Prologix):
-    python cli.py --transport prologix --addr 12 --ip 192.168.1.50 idn
-    python cli.py --transport prologix --addr 12 --ip 192.168.1.50 read-all
+    python examples/cli.py --transport prologix --addr 12 --ip 192.168.1.50 idn
+    python examples/cli.py --transport prologix --addr 12 --ip 192.168.1.50 read-all
 
 Argumentos de conexión según transporte:
     --transport keysight: --addr (obligatorio), --board (default 0),
@@ -21,7 +21,7 @@ Argumentos de conexión según transporte:
 IMPORTANTE -- imports diferidos a propósito: `pyvisa` (necesario para
 Keysight) solo se importa si se elige --transport keysight, y el socket
 de Prologix no tiene dependencias externas. Esto permite compartir este
-mismo cli.py con alguien que solo tiene uno de los dos adaptadores, sin
+mismo ejemplo con alguien que solo tiene uno de los dos adaptadores, sin
 que le falle por no tener instalada una dependencia que no va a usar
 (ver README.md, sección "Windows vs Linux / dependencias por transporte").
 """
@@ -32,7 +32,7 @@ import argparse
 import sys
 import time
 
-from lakeshore218 import (
+from lakeshore218_driver import (
     Lakeshore218,
     TemperatureUnit,
     FilterConfig,
@@ -60,9 +60,9 @@ def build_transport(args: argparse.Namespace):
         except ImportError as exc:
             raise SystemExit(
                 "No se pudo importar keysight_visa / pyvisa. "
-                "Instalá pyvisa (`pip install pyvisa`) y el runtime VISA "
+                "Instala el extra `pip install -e \".[keysight]\"` y el runtime VISA "
                 "correspondiente a tu sistema operativo. "
-                "Ver README.md, sección Windows vs Linux."
+                "Ver README.md."
             ) from exc
         return KeysightVISATransport(
             gpib_address=args.addr,
@@ -78,7 +78,7 @@ def build_transport(args: argparse.Namespace):
         except ImportError as exc:
             raise SystemExit(
                 "No se pudo importar prologix_ethernet.py. "
-                "Verificá que el archivo esté en la misma carpeta que cli.py."
+                "Instala el proyecto con `pip install -e .` y vuelve a intentarlo."
             ) from exc
         return PrologixEthernetTransport(
             ip_address=args.ip,

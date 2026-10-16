@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.3.1 - Reorganización del proyecto
+
+### Cambiado
+- Movidos el driver y los transportes a `src/`, y las herramientas
+  ejecutables a `examples/`.
+- Añadido `pyproject.toml` para instalar el proyecto y declarar la
+  dependencia opcional de Keysight.
+- Añadido el módulo `lakeshore218_driver` y se conserva `lakeshore218`
+  como importación de compatibilidad.
+- Las validaciones de parámetros del driver ahora usan
+  `Lakeshore218ValidationError`, que sigue siendo subclase de `ValueError`.
+
 ## v1.3 - Transporte Prologix GPIB-Ethernet
 
 ### Agregado

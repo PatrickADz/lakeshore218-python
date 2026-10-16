@@ -4,7 +4,7 @@
 
 ```
                     ┌─────────────────────┐
-                    │   base.py            │
+                    │   src/base.py            │
                     │   GPIBTransport (ABC)│
                     │   - connect()         │
                     │   - disconnect()      │
@@ -16,7 +16,7 @@
              ┌─────────────────┴─────────────────┐
              │                                     │
   ┌──────────▼───────────┐            ┌───────────▼────────────┐
-  │ keysight_visa.py       │            │ prologix_ethernet.py    │
+  │ src/keysight_visa.py       │            │ src/prologix_ethernet.py    │
   │ KeysightVISATransport  │            │ PrologixEthernetTransport│
   │ (usa pyvisa)            │            │ (usa socket TCP)         │
   └──────────┬───────────┘            └───────────┬────────────┘
@@ -24,22 +24,22 @@
              └──────────────────┬──────────────────┘
                                  │ se inyecta como `transport`
                      ┌───────────▼────────────┐
-                     │   lakeshore218.py        │
+                     │   src/lakeshore218_driver.py        │
                      │   Lakeshore218            │
                      │   (driver del instrumento)│
                      └───────────┬────────────┘
                                  │ usado por
                      ┌───────────▼────────────┐
-                     │   cli.py                  │
+                     │   examples/cli.py                  │
                      │   (herramienta de terminal)│
                      └────────────────────────┘
 ```
 
-**Regla de oro:** las flechas solo van hacia abajo. `lakeshore218.py`
-nunca importa `pyvisa` ni `socket`. `cli.py` es el único que decide
+**Regla de oro:** las flechas solo van hacia abajo. `src/lakeshore218_driver.py`
+nunca importa `pyvisa` ni `socket`. `examples/cli.py` es el único que decide
 *qué* transporte instanciar.
 
-## `base.py` — el contrato
+## `src/base.py` — el contrato
 
 ```python
 class GPIBTransport(ABC):
@@ -54,7 +54,7 @@ Cualquier adaptador nuevo (ej. un futuro NI-GPIB, otro Ethernet, etc.)
 solo necesita subclasear esto e implementar los 4 métodos abstractos.
 `Lakeshore218` no requiere ningún cambio.
 
-## `lakeshore218.py` — mapa de métodos por categoría
+## `src/lakeshore218_driver.py` — mapa de métodos por categoría
 
 Para navegar rápido sin tener que leer el archivo completo. Los nombres
 coinciden con los comandos SCPI reales entre paréntesis.
@@ -124,7 +124,7 @@ comando de escritura pura (`*RST`, `MNMXRST`, `ALMRST`, `INNAME`,
 solamente, porque el 218 no responde nada a esos — si se manda con
 `query()` el `read()` posterior queda esperando hasta el timeout.
 Esto ya está resuelto correctamente método por método en
-`lakeshore218.py`; es lo primero a revisar si agregás un comando nuevo
+`src/lakeshore218_driver.py`; es lo primero a revisar si agregás un comando nuevo
 a mano y ves timeouts inesperados.
 
 ## Detalles específicos de cada transporte
@@ -146,7 +146,7 @@ a mano y ves timeouts inesperados.
 - `++eos 2` (LF) como terminador hacia el instrumento
 - `++read_tmo_ms` configurado según el `timeout_s` del constructor
 
-## `cli.py` — cómo está armado
+## `examples/cli.py` — cómo está armado
 
 Usa `argparse` con subcomandos (patrón tipo `git <subcomando>`). Cada
 subcomando tiene un handler `cmd_<nombre>(ls, args)` que recibe una

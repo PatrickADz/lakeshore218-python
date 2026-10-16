@@ -2,7 +2,7 @@
 Prueba básica de comunicación con el Lakeshore 218 vía Prologix GPIB-Ethernet.
 """
 
-from lakeshore218 import Lakeshore218
+from lakeshore218_driver import Lakeshore218
 from prologix_ethernet import PrologixEthernetTransport
 
 PROLOGIX_IP = "192.168.1.50"

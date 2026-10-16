@@ -3,7 +3,7 @@ Driver Lakeshore Model 218 Temperature Monitor.
 
 Uso típico:
 
-    from lakeshore218 import Lakeshore218
+    from lakeshore218_driver import Lakeshore218
     from keysight_visa import KeysightVISATransport
 
     transport = KeysightVISATransport(gpib_address=12)
@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from base import GPIBTransport
+from exceptions import Lakeshore218ValidationError
 
 
 class TemperatureUnit(Enum):
@@ -150,7 +151,7 @@ class Lakeshore218:
     def _check_channel(self, channel: int, allow_zero: bool = False) -> None:
         lo = 0 if allow_zero else self.MIN_CHANNEL
         if not (lo <= channel <= self.MAX_CHANNEL):
-            raise ValueError(
+            raise Lakeshore218ValidationError(
                 f"Canal {channel} fuera de rango "
                 f"({lo}-{self.MAX_CHANNEL})"
             )
@@ -592,7 +593,7 @@ class Lakeshore218:
 
     def _check_user_curve(self, curve_number: int) -> None:
         if not (self.USER_CURVE_MIN <= curve_number <= self.USER_CURVE_MAX):
-            raise ValueError(
+            raise Lakeshore218ValidationError(
                 f"Curva {curve_number} fuera de rango de curvas de usuario "
                 f"({self.USER_CURVE_MIN}-{self.USER_CURVE_MAX})"
             )
@@ -651,7 +652,7 @@ class Lakeshore218:
     def set_ieee_address(self, address: int) -> None:
         """IEEE <address> -- Cambia la dirección GPIB del equipo (requiere reinicio)."""
         if not (1 <= address <= 30):
-            raise ValueError("Dirección GPIB debe estar entre 1 y 30")
+            raise Lakeshore218ValidationError("Dirección GPIB debe estar entre 1 y 30")
         self.transport.write(f"IEEE {address}")
 
     def get_ieee_address(self) -> int:

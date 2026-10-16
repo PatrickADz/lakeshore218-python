@@ -81,7 +81,7 @@ lo primero a revisar es:
 
 ## 6. Comandos verificados como correctos para el 218
 
-Estos son los comandos SCPI reales que usa `lakeshore218.py`, tal como
+Estos son los comandos SCPI reales que usa `src/lakeshore218_driver.py`, tal como
 están documentados en el manual del Model 218, quedan acá como
 referencia rápida al momento de debuggear con Connection Expert o un
 terminal serie/VISA manual:
@@ -112,7 +112,7 @@ ellos el `read()` se va a quedar esperando hasta el timeout.
 ## 7. Checklist de prueba rápida
 
 ```python
-from lakeshore218 import Lakeshore218
+from lakeshore218_driver import Lakeshore218
 from keysight_visa import KeysightVISATransport
 
 transport = KeysightVISATransport(gpib_address=12)  # ajustar dirección real
