@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.3.2 - Normalización de librería
+
+### Cambiado
+- Métodos de lakeshore218_driver fueron normalizados con los del controlador lakeshore 350.
+
 ## v1.3.1 - Reorganización del proyecto
 
 ### Cambiado

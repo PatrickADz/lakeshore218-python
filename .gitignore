@@ -16,5 +16,8 @@ data/
 *.png
 
 Docs/
+docs/
 Tests/
-Legacy/ 
+tests/
+Legacy/
+legacy/
