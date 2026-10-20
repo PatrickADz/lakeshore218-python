@@ -17,10 +17,62 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from enum import Enum
 
 from base import GPIBTransport
 
 logger = logging.getLogger(__name__)
+
+
+class TemperatureUnit(Enum):
+    KELVIN = 1
+    CELSIUS = 2
+    SENSOR = 3  # unidades "raw" del sensor (V, Ohm, etc. según tipo)
+
+
+class SensorType(Enum):
+    """INTYPE: tipo de sensor conectado al canal (parámetro 'sensor type')."""
+    DISABLED = 0
+    DIODE = 1
+    PLATINUM_RTD = 2
+    NTC_RTD = 3
+
+
+class InputRange(Enum):
+    """
+    Rango del canal (parámetro 'input range' de INTYPE).
+    El significado depende del sensor_type; ver manual sección INTYPE.
+    Para diodo:
+        0 = 2.5 V
+        1 = 7.5 V
+    """
+    DIODE_2_5V = 0
+    DIODE_7_5V = 1
+
+
+class AlarmSource(Enum):
+    KELVIN = 1
+    CELSIUS = 2
+    SENSOR_UNITS = 3
+    LINEAR_DATA = 4
+
+
+@dataclass
+class InputTypeConfig:
+    """Configuración de tipo de entrada devuelta/enviada por INTYPE."""
+    sensor_type: int          # 0=Disabled,1=Diode,2=PT RTD,3=NTC RTD
+    autorange: bool           # 0/1 (solo aplica a RTD)
+    input_range: int          # rango numérico (ver manual, depende de sensor_type)
+    compensation: bool        # 0/1 compensación de corriente reversa (solo NTC RTD)
+    units: int                # unidades para display: 1=Kelvin, 2=Celsius, 3=Sensor
+
+
+@dataclass
+class FilterConfig:
+    """Configuración de filtro de promediado por canal (comando FILTER)."""
+    enabled: bool
+    points: int    # 2-64 puntos usados para el promedio
+    window: int    # 1-10 %, ventana de datos válidos para el filtro
 
 
 @dataclass
@@ -102,7 +154,14 @@ class LakeShore218:
         logger.info("Connecting to Lake Shore 218")
         self.transport.connect()
         self._connected = True
-        logger.info("Connection established: %s", self.get_idn())
+        try:
+            idn = self.get_idn()
+        except Exception:
+            # The constructor never returns, so __exit__ would not run:
+            # close the transport here instead of leaking the socket/VISA session.
+            self.disconnect()
+            raise
+        logger.info("Connection established: %s", idn)
 
     def disconnect(self):
         if self._connected:
@@ -207,16 +266,19 @@ class LakeShore218:
         self._validate_channel(channel)
         return float(self._query(f"LRDG? {channel}"))
 
+    def read_channel(self, channel, unit="K"):
+        """
+        Reads one channel in "K", "C", "S" (sensor units) or "L" (linear).
+        """
+        self._validate_channel(channel)
+        return float(self._query(f"{self._reading_command(unit)} {channel}"))
+
     def read_all_channels(self, unit="K"):
         """
         Returns a dict {channel: reading} for all 8 channels, in the given unit:
         "K", "C", "S" (sensor units) or "L" (linear). One "xRDG? 0" query.
         """
-        cmd = self._READ_COMMANDS.get(str(unit).upper())
-        if cmd is None:
-            raise ValueError(
-                f"Invalid unit {unit!r}. Use one of {tuple(self._READ_COMMANDS)}."
-            )
+        cmd = self._reading_command(unit)
         values = self._parse_floats(self._query(f"{cmd} 0"))
         return dict(zip(self.CHANNELS, values))
 
@@ -257,12 +319,7 @@ class LakeShore218:
 
         curve = int(self._query(f"INCRV? {channel}"))
 
-        filter_parts = self._query(f"FILTER? {channel}").split(",")
-        filter_cfg = {
-            "enabled": bool(int(filter_parts[0])),
-            "points": int(filter_parts[1]),
-            "window": float(filter_parts[2]),
-        }
+        filter_cfg = self.get_filter(channel)
 
         return {
             "channel": channel,
@@ -286,6 +343,16 @@ class LakeShore218:
         """INCRV? -- curve number assigned to the channel."""
         self._validate_channel(channel)
         return int(self._query(f"INCRV? {channel}"))
+
+    def get_filter(self, channel):
+        """FILTER? -- averaging filter as a dict {enabled, points, window}."""
+        self._validate_channel(channel)
+        enabled, points, window = self._query(f"FILTER? {channel}").split(",")[:3]
+        return {
+            "enabled": bool(int(enabled)),
+            "points": int(points),
+            "window": float(window),
+        }
 
     # Input configuration - write
     def set_input_type(self, channel, sensor_type, range_code, unit="K",
@@ -679,12 +746,27 @@ class LakeShore218:
             return reverse_map[value]
         raise ValueError(f"{what.capitalize()} must be an int or a valid string")
 
+    @classmethod
+    def _reading_command(cls, unit):
+        if isinstance(unit, TemperatureUnit):
+            unit = cls.UNIT_MAP[unit.value]
+        cmd = cls._READ_COMMANDS.get(str(unit).strip().upper())
+        if cmd is None:
+            raise ValueError(
+                f"Invalid unit {unit!r}. Use one of {tuple(cls._READ_COMMANDS)}."
+            )
+        return cmd
+
     def _normalize_sensor_type(self, sensor_type):
+        if isinstance(sensor_type, SensorType):
+            return sensor_type.value
         return self._normalize_code(
             sensor_type, self.SENSOR_TYPE_MAP, self.SENSOR_TYPE_REVERSE_MAP, "sensor type"
         )
 
     def _normalize_unit(self, unit):
+        if isinstance(unit, TemperatureUnit):
+            return unit.value
         if isinstance(unit, str):
             unit = unit.strip().upper()
         return self._normalize_code(unit, self.UNIT_MAP, self.UNIT_REVERSE_MAP, "unit")

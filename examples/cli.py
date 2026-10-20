@@ -33,9 +33,8 @@ import sys
 import time
 
 from lakeshore218_driver import (
-    Lakeshore218,
+    LakeShore218,
     TemperatureUnit,
-    FilterConfig,
     AlarmConfig,
 )
 
@@ -94,33 +93,33 @@ def build_transport(args: argparse.Namespace):
 # Handlers de cada subcomando
 # --------------------------------------------------------------------
 
-def cmd_idn(ls: Lakeshore218, args: argparse.Namespace) -> None:
-    print(ls.idn())
+def cmd_idn(ls: LakeShore218, args: argparse.Namespace) -> None:
+    print(ls.get_idn())
 
 
-def cmd_read(ls: Lakeshore218, args: argparse.Namespace) -> None:
+def cmd_read(ls: LakeShore218, args: argparse.Namespace) -> None:
     unit = UNIT_MAP[args.unit]
-    value = ls.get_reading(args.channel, unit)
+    value = ls.read_channel(args.channel, unit)
     print(f"Canal {args.channel}: {value:.4f} {args.unit}")
 
 
-def cmd_read_all(ls: Lakeshore218, args: argparse.Namespace) -> None:
+def cmd_read_all(ls: LakeShore218, args: argparse.Namespace) -> None:
     unit = UNIT_MAP[args.unit]
-    readings = ls.get_all_readings(unit)
-    for ch, value in enumerate(readings, start=1):
+    readings = ls.read_all_channels(unit)
+    for ch, value in readings.items():
         print(f"Canal {ch}: {value:.4f} {args.unit}")
 
 
-def cmd_status(ls: Lakeshore218, args: argparse.Namespace) -> None:
-    raw = ls.get_reading_status(args.channel)
-    flags = ls.decode_reading_status(raw)
+def cmd_status(ls: LakeShore218, args: argparse.Namespace) -> None:
+    raw = ls.sensor_status(args.channel)
+    flags = ls.decode_sensor_status(raw)
     print(f"Canal {args.channel} -- status crudo: {raw}")
     for flag_name, value in flags.items():
         marca = "X" if value else " "
         print(f"  [{marca}] {flag_name}")
 
 
-def cmd_name(ls: Lakeshore218, args: argparse.Namespace) -> None:
+def cmd_name(ls: LakeShore218, args: argparse.Namespace) -> None:
     if args.set is not None:
         ls.set_input_name(args.channel, args.set)
         print(f"Canal {args.channel} renombrado a '{args.set}'")
@@ -128,17 +127,17 @@ def cmd_name(ls: Lakeshore218, args: argparse.Namespace) -> None:
         print(f"Canal {args.channel}: '{ls.get_input_name(args.channel)}'")
 
 
-def cmd_filter(ls: Lakeshore218, args: argparse.Namespace) -> None:
+def cmd_filter(ls: LakeShore218, args: argparse.Namespace) -> None:
     if args.set:
-        config = FilterConfig(enabled=args.on, points=args.points, window=args.window)
-        ls.set_filter(args.channel, config)
+        ls.set_filter(args.channel, args.on, args.points, args.window)
+        config = ls.get_filter(args.channel)
         print(f"Filtro canal {args.channel} configurado: {config}")
     else:
         config = ls.get_filter(args.channel)
         print(f"Filtro canal {args.channel}: {config}")
 
 
-def cmd_alarm(ls: Lakeshore218, args: argparse.Namespace) -> None:
+def cmd_alarm(ls: LakeShore218, args: argparse.Namespace) -> None:
     if args.set:
         config = AlarmConfig(
             enabled=args.on,
@@ -156,7 +155,7 @@ def cmd_alarm(ls: Lakeshore218, args: argparse.Namespace) -> None:
         print(f"Estado actual: high={status.high_state} low={status.low_state}")
 
 
-def cmd_minmax(ls: Lakeshore218, args: argparse.Namespace) -> None:
+def cmd_minmax(ls: LakeShore218, args: argparse.Namespace) -> None:
     if args.reset:
         ls.reset_min_max()
         print("Min/Max reiniciados en todos los canales")
@@ -165,7 +164,7 @@ def cmd_minmax(ls: Lakeshore218, args: argparse.Namespace) -> None:
     print(f"Canal {args.channel}: min={data.minimum:.4f} max={data.maximum:.4f}")
 
 
-def cmd_monitor(ls: Lakeshore218, args: argparse.Namespace) -> None:
+def cmd_monitor(ls: LakeShore218, args: argparse.Namespace) -> None:
     unit = UNIT_MAP[args.unit]
     channels = args.channels if args.channels else list(range(1, 9))
     print(f"Monitoreando canales {channels} cada {args.interval}s "
@@ -174,7 +173,7 @@ def cmd_monitor(ls: Lakeshore218, args: argparse.Namespace) -> None:
         while True:
             timestamp = time.strftime("%H:%M:%S")
             valores = [
-                f"CH{ch}={ls.get_reading(ch, unit):.3f}{args.unit}"
+                f"CH{ch}={ls.read_channel(ch, unit):.3f}{args.unit}"
                 for ch in channels
             ]
             print(f"[{timestamp}] " + "  ".join(valores))
@@ -183,7 +182,7 @@ def cmd_monitor(ls: Lakeshore218, args: argparse.Namespace) -> None:
         print("\nMonitoreo detenido.")
 
 
-def cmd_shell(ls: Lakeshore218, args: argparse.Namespace) -> None:
+def cmd_shell(ls: LakeShore218, args: argparse.Namespace) -> None:
     """Modo interactivo: manda comandos SCPI crudos directo al instrumento."""
     print("Shell interactivo Lakeshore 218. Comandos SCPI crudos.")
     print("Los que terminan en '?' se mandan con query(), el resto con write().")
@@ -293,7 +292,7 @@ def main() -> int:
 
     transport = build_transport(args)
     try:
-        with Lakeshore218(transport) as ls:
+        with LakeShore218(transport) as ls:
             args.func(ls, args)
     except Exception as exc:  # noqa: BLE001 - se quiere reportar cualquier falla de conexión/comando
         print(f"Error: {exc}", file=sys.stderr)

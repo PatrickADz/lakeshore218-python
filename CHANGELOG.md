@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.3 - Correcciones tras la normalización
+
+### Corregido
+- Actualización de API: `lakeshore218.py`, `cli.py`, `test_connection_prologix.py`
+
+
 ## v1.3.2 - Normalización de librería
 
 ### Cambiado

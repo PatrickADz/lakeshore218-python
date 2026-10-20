@@ -1,4 +1,4 @@
-# Lakeshore 218 — Driver Python
+# Lakeshore 218 - Driver Python
 
 Driver para controlar el **Lakeshore Model 218 Temperature Monitor** mediante
 GPIB, con transportes intercambiables para Keysight USB-GPIB y Prologix
@@ -9,6 +9,8 @@ GPIB-Ethernet.
 Desde la raíz del repositorio:
 
 ```bash
+git clone https://github.com/PatrickADz/lakeshore218-python.git
+cd lakeshore218-python
 pip install -e .
 ```
 
@@ -25,7 +27,7 @@ estándar de Python.
 ## Uso como librería
 
 ```python
-from lakeshore218_driver import Lakeshore218
+from lakeshore218_driver import LakeShore218
 from prologix_ethernet import PrologixEthernetTransport
 
 transport = PrologixEthernetTransport(
@@ -33,9 +35,9 @@ transport = PrologixEthernetTransport(
     gpib_address=12,
 )
 
-with Lakeshore218(transport) as instrument:
-    print(instrument.idn())
-    print(instrument.get_all_temperatures_kelvin())
+with LakeShore218(transport) as instrument:
+    print(instrument.get_idn())
+    print(instrument.read_all_channels("K"))
 ```
 
 El nombre de importación `lakeshore218` sigue disponible por compatibilidad:
