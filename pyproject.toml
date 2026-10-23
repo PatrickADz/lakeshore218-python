@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lakeshore218-python"
-version = "1.3.3"
+version = "1.3.4"
 description = "Python driver for the Lakeshore Model 218 temperature monitor"
 readme = "README.md"
 requires-python = ">=3.9"

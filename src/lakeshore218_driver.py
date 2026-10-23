@@ -276,10 +276,21 @@ class LakeShore218:
     def read_all_channels(self, unit="K"):
         """
         Returns a dict {channel: reading} for all 8 channels, in the given unit:
-        "K", "C", "S" (sensor units) or "L" (linear). One "xRDG? 0" query.
+        "K", "C", "S" (sensor units) or "L" (linear). Uses one "xRDG? 0"
+        query when it returns all 8 readings, otherwise queries each channel.
         """
         cmd = self._reading_command(unit)
         values = self._parse_floats(self._query(f"{cmd} 0"))
+        if len(values) != len(self.CHANNELS):
+            logger.warning(
+                "%s 0 returned %d readings; retrying channels individually",
+                cmd,
+                len(values),
+            )
+            return {
+                channel: self.read_channel(channel, unit)
+                for channel in self.CHANNELS
+            }
         return dict(zip(self.CHANNELS, values))
 
     def sensor_status(self, channel):

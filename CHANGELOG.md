@@ -1,10 +1,16 @@
 # Changelog
 
+## v1.3.4 - Debug lectura de canales
+
+### Corregido
+- `lakeshore218_driver.py`: read_all_channels
+- `prologix_ethernet.py`: usa `++eos 0` (CR+LF), necesario para que el Lake
+  Shore 218 interprete correctamente las consultas por canal.
+
 ## v1.3.3 - Correcciones tras la normalización
 
 ### Corregido
 - Actualización de API: `lakeshore218.py`, `cli.py`, `test_connection_prologix.py`
-
 
 ## v1.3.2 - Normalización de librería
 

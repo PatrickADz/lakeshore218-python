@@ -185,8 +185,7 @@ def cmd_monitor(ls: LakeShore218, args: argparse.Namespace) -> None:
 def cmd_shell(ls: LakeShore218, args: argparse.Namespace) -> None:
     """Modo interactivo: manda comandos SCPI crudos directo al instrumento."""
     print("Shell interactivo Lakeshore 218. Comandos SCPI crudos.")
-    print("Los que terminan en '?' se mandan con query(), el resto con write().")
-    print("Escribí 'exit' o Ctrl+D para salir.\n")
+    print("'exit' o Ctrl+D para salir.\n")
     while True:
         try:
             raw = input("218> ").strip()
@@ -198,7 +197,7 @@ def cmd_shell(ls: LakeShore218, args: argparse.Namespace) -> None:
         if raw.lower() in ("exit", "quit"):
             break
         try:
-            if raw.endswith("?"):
+            if "?" in raw:
                 print(ls.transport.query(raw))
             else:
                 ls.transport.write(raw)
